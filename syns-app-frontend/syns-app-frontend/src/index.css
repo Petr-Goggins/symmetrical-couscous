@@ -152,6 +152,17 @@
 }
 
 @layer components {
+  .dynamic-island {
+    width: 200px;
+    max-width: calc(100% - 32px);
+  }
+  .dynamic-island.island-wide { width: 320px; }
+
+  @media (max-width: 767px) {
+    .dynamic-island { width: 180px; }
+    .dynamic-island.island-wide { width: min(320px, calc(100% - 32px)); }
+  }
+
   .card {
     background-color: var(--card);
     border: 1px solid var(--border);

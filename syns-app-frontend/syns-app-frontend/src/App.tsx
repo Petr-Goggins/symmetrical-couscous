@@ -88,6 +88,7 @@ function AppRoutes() {
                 <Route path="/chat" element={<ChatPage onOpenSidebar={dummyOpenSidebar} />} />
                 <Route path="/profile" element={<ProfilePage onOpenSidebar={dummyOpenSidebar} />} />
                 <Route path="/workouts" element={<WorkoutLogPage onOpenSidebar={dummyOpenSidebar} />} />
+                <Route path="/workout" element={<WorkoutLogPage onOpenSidebar={dummyOpenSidebar} />} />
                 <Route path="/sleep" element={<SleepLogPage onOpenSidebar={dummyOpenSidebar} />} />
                 <Route path="/achievements" element={<AchievementsPage onOpenSidebar={dummyOpenSidebar} />} />
                 <Route path="/settings" element={<SettingsPage onOpenSidebar={dummyOpenSidebar} />} />

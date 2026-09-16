@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { Plus, Dumbbell, Trash2, ChevronLeft, ChevronRight, Search, Calendar, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useWorkoutStore } from '@/store/workoutStore';
 
 const EXERCISES = [
   'Приседания со штангой', 'Приседания с гантелями', 'Выпады с гантелями',
@@ -16,6 +17,10 @@ const EXERCISES = [
 
 export default function WorkoutLogPage({ onOpenSidebar: _onOpenSidebar }: { onOpenSidebar?: () => void }) {
   const user = useAuthStore((s) => s.user);
+  const activeWorkout = useWorkoutStore((state) => state.isActive);
+  const startWorkout = useWorkoutStore((state) => state.startWorkout);
+  const stopWorkout = useWorkoutStore((state) => state.stopWorkout);
+  const hydrateWorkout = useWorkoutStore((state) => state.hydrate);
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
@@ -26,7 +31,6 @@ export default function WorkoutLogPage({ onOpenSidebar: _onOpenSidebar }: { onOp
   });
   const [date, setDate] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeWorkout, setActiveWorkout] = useState(() => Boolean(localStorage.getItem('ascend-workout-start')));
 
   if (!user) {
     return <div className="p-4 text-text-secondary">Пожалуйста, войдите.</div>;
@@ -38,6 +42,10 @@ export default function WorkoutLogPage({ onOpenSidebar: _onOpenSidebar }: { onOp
     newDate.setDate(newDate.getDate() + days);
     setDate(newDate);
   };
+
+  useEffect(() => {
+    hydrateWorkout();
+  }, [hydrateWorkout]);
 
   useEffect(() => {
     loadLogs();
@@ -98,7 +106,7 @@ export default function WorkoutLogPage({ onOpenSidebar: _onOpenSidebar }: { onOp
           <Dumbbell size={28} className="text-accent-blue" />
           Тренировки
         </h1>
-        <div className="flex items-center gap-2"><span className="text-xs bg-accent-blue/10 text-accent-blue px-3 py-1 rounded-full">{logs.length} упр.</span><button type="button" onClick={() => { if (activeWorkout) { localStorage.removeItem('ascend-workout-start'); setActiveWorkout(false); toast.success('Тренировка завершена'); } else { localStorage.setItem('ascend-workout-start', String(Date.now())); setActiveWorkout(true); toast.success('Тренировка началась'); } }} className="btn-primary px-3 py-1.5 text-xs">{activeWorkout ? 'Завершить' : 'Начать'}</button></div>
+        <div className="flex items-center gap-2"><span className="text-xs bg-accent-blue/10 text-accent-blue px-3 py-1 rounded-full">{logs.length} упр.</span><button type="button" onClick={() => { if (activeWorkout) { stopWorkout(); toast.success('Тренировка завершена'); } else { startWorkout(); toast.success('Тренировка началась'); } }} className="btn-primary px-3 py-1.5 text-xs">{activeWorkout ? 'Завершить' : 'Начать'}</button></div>
       </div>
 
       {/* Дата — прозрачная, как в питании */}

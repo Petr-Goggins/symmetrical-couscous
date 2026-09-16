@@ -1,22 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Activity, Dumbbell, Moon, Pause, Play, UserRound, Droplet } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Activity, Droplet, Dumbbell, Moon, Pause, Play, User } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useProfileStore } from '@/store/profileStore';
-import { supabase } from '@/lib/supabase';
+import { useWorkoutStore } from '@/store/workoutStore';
+import { useSleepLogStore } from '@/store/sleepLogStore';
+import { useCycleStore } from '@/store/cycleStore';
+import { useNutritionStore } from '@/store/nutritionStore';
 
-type IslandState = 'onboarding' | 'sleep' | 'cycle' | 'workout' | 'paused' | 'ok';
-type WorkoutSession = { startedAt: number; pausedAt: number | null; pausedMs: number };
-
-const WORKOUT_STORAGE_KEY = 'ascend-workout-session';
-const legacyWorkoutKey = 'ascend-workout-start';
-
-const stateText: Record<Exclude<IslandState, 'workout' | 'paused'>, string> = {
-  onboarding: 'Заполните анкету →',
-  sleep: 'Запишите сон',
-  cycle: 'Сегодня',
-  ok: 'Сегодня всё по плану',
-};
+type IslandState = 'workout' | 'paused' | 'no-profile' | 'no-sleep' | 'cycle' | 'idle';
 
 const glassStyle: React.CSSProperties = {
   position: 'fixed',
@@ -24,10 +16,7 @@ const glassStyle: React.CSSProperties = {
   left: '50%',
   transform: 'translateX(-50%)',
   zIndex: 100,
-  width: 200,
-  minWidth: 200,
   height: 40,
-  maxWidth: 'calc(100% - 32px)',
   padding: '0 16px',
   borderRadius: 32,
   background: 'rgba(255, 255, 255, 0.05)',
@@ -37,142 +26,131 @@ const glassStyle: React.CSSProperties = {
   boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
 };
 
+function getCycleText(phase: string) {
+  return ['Овуляторная', 'Фолликулярная'].includes(phase)
+    ? `${phase}. Пик силы! Добавь кардио`
+    : `${phase}. Снизь интенсивность`;
+}
+
 export default function DynamicIsland() {
   const user = useAuthStore((state) => state.user);
-  const { profile, loading: profileLoading } = useProfileStore();
-  const location = useLocation();
+  const profile = useProfileStore((state) => state.profile);
+  const profileLoading = useProfileStore((state) => state.loading);
+  const fetchProfile = useProfileStore((state) => state.fetchProfile);
+  const isActive = useWorkoutStore((state) => state.isActive);
+  const isPaused = useWorkoutStore((state) => state.isPaused);
+  const elapsedTime = useWorkoutStore((state) => state.elapsedTime);
+  const togglePause = useWorkoutStore((state) => state.togglePause);
+  const hasSleepToday = useSleepLogStore((state) => state.hasSleepToday);
+  const fetchTodaySleep = useSleepLogStore((state) => state.fetchToday);
+  const phase = useCycleStore((state) => state.getCurrentPhase());
+  const setPhase = useCycleStore((state) => state.setPhase);
+  const calories = useNutritionStore((state) => state.getTodayCalories());
+  const fetchTodayCalories = useNutritionStore((state) => state.fetchToday);
   const navigate = useNavigate();
-  const [sleepRecorded, setSleepRecorded] = useState(false);
-  const [calories, setCalories] = useState(0);
-  const [cyclePhase, setCyclePhase] = useState('');
-  const [session, setSession] = useState<WorkoutSession | null>(() => readSession());
-  const [now, setNow] = useState(Date.now());
-  const [typedText, setTypedText] = useState('');
-
-  const islandState: IslandState = useMemo(() => {
-    if (!profile) return 'onboarding';
-    if (session?.pausedAt) return 'paused';
-    if (session) return 'workout';
-    if (!sleepRecorded) return 'sleep';
-    if (profile.gender === 'female' && cyclePhase) return 'cycle';
-    return 'ok';
-  }, [cyclePhase, profile, session, sleepRecorded]);
-
-  const staticText = islandState === 'workout'
-    ? 'Тренировка:'
-    : islandState === 'paused'
-      ? 'Пауза'
-      : islandState === 'cycle'
-        ? `Сегодня ${cyclePhase}`
-        : stateText[islandState];
+  const hydrateWorkout = useWorkoutStore((state) => state.hydrate);
+  const [state, setState] = useState<IslandState>('idle');
+  const fullText = useRef('');
+  const [displayText, setDisplayText] = useState('');
+  const typingTimer = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!user || profileLoading || !profile) return;
-    let cancelled = false;
-    const loadStatus = async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      try {
-        const { data, error } = await supabase
-          .from('sleep_logs')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('log_date', today)
-          .maybeSingle();
-        if (!error && !cancelled) setSleepRecorded(Boolean(data));
-      } catch (error) {
-        console.error('DynamicIsland sleep status error', error);
-      }
-      try {
-        const { data, error } = await supabase
-          .from('nutrition_logs')
-          .select('calories')
-          .eq('user_id', user.id)
-          .eq('log_date', today);
-        if (!error && !cancelled) setCalories(data?.reduce((sum, item) => sum + Number(item.calories || 0), 0) || 0);
-      } catch (error) {
-        console.error('DynamicIsland calories status error', error);
-      }
-      if (profile.gender === 'female' && profile.cycle_last_period) {
-        const length = profile.cycle_length || 28;
-        const day = Math.max(0, Math.floor((Date.now() - new Date(profile.cycle_last_period).getTime()) / 86400000) % length);
-        const phase = day < 5 ? 'Менструация' : day < 14 ? 'Фолликулярная' : day < 17 ? 'Овуляторная' : 'Лютеиновая';
-        if (!cancelled) setCyclePhase(phase);
-      }
-    };
-    void loadStatus();
-    const refresh = window.setInterval(() => void loadStatus(), 60000);
-    return () => { cancelled = true; window.clearInterval(refresh); };
-  }, [profile, profileLoading, user]);
+    hydrateWorkout();
+  }, [hydrateWorkout]);
 
   useEffect(() => {
-    const refreshSession = () => { setSession(readSession()); setNow(Date.now()); };
-    window.addEventListener('storage', refreshSession);
-    const timer = window.setInterval(refreshSession, 1000);
-    return () => { window.removeEventListener('storage', refreshSession); window.clearInterval(timer); };
-  }, []);
+    if (user && !profile && !profileLoading) void fetchProfile(user.id);
+  }, [fetchProfile, profile, profileLoading, user]);
 
   useEffect(() => {
-    setTypedText('');
+    if (!user || !profile) return;
+    void fetchTodaySleep(user.id);
+    void fetchTodayCalories(user.id);
+    if (profile.gender === 'female' && profile.cycle_last_period) {
+      const length = profile.cycle_length || 28;
+      const day = Math.max(0, Math.floor((Date.now() - new Date(profile.cycle_last_period).getTime()) / 86400000) % length);
+      setPhase(day < 5 ? 'Менструация' : day < 14 ? 'Фолликулярная' : day < 17 ? 'Овуляторная' : 'Лютеиновая');
+    } else {
+      setPhase(null);
+    }
+  }, [fetchTodayCalories, fetchTodaySleep, profile, setPhase, user]);
+
+  const nextState = useMemo<IslandState>(() => {
+    if (isActive) return isPaused ? 'paused' : 'workout';
+    if (!profile?.goal || !profile.weight || !profile.height) return 'no-profile';
+    if (!hasSleepToday) return 'no-sleep';
+    if ((profile.gender === 'female' || profile.gender === 'Женский') && phase) return 'cycle';
+    return 'idle';
+  }, [hasSleepToday, isActive, isPaused, phase, profile]);
+
+  useEffect(() => {
+    if (nextState !== state) setState(nextState);
+  }, [nextState, state]);
+
+  const stateContent = useMemo(() => {
+    switch (state) {
+      case 'workout': return 'Тренировка:';
+      case 'paused': return '⏸️ Пауза';
+      case 'no-profile': return 'Заполните анкету →';
+      case 'no-sleep': return 'Запишите сон';
+      case 'cycle': return phase ? `Сегодня ${getCycleText(phase)}` : 'Сегодня';
+      case 'idle': return calories > 0 ? `🍽️ ${calories} ккал` : 'Готов к тренировке';
+    }
+  }, [calories, phase, state]);
+
+  useEffect(() => {
+    fullText.current = stateContent;
+    setDisplayText('');
+    if (typingTimer.current) window.clearInterval(typingTimer.current);
     let index = 0;
-    const timer = window.setInterval(() => {
+    const speed = stateContent.length > 30 ? 80 : 120;
+    typingTimer.current = window.setInterval(() => {
       index += 1;
-      setTypedText(staticText.slice(0, index));
-      if (index >= staticText.length) window.clearInterval(timer);
-    }, 120);
-    return () => window.clearInterval(timer);
-  }, [islandState, staticText]);
+      setDisplayText(fullText.current.slice(0, index));
+      if (index >= fullText.current.length && typingTimer.current) {
+        window.clearInterval(typingTimer.current);
+        typingTimer.current = null;
+      }
+    }, speed);
+    return () => { if (typingTimer.current) window.clearInterval(typingTimer.current); };
+  }, [stateContent]);
 
   if (!user || profileLoading) return null;
-  const elapsed = session ? formatElapsed(getElapsedMs(session, now)) : '';
-  const text = islandState === 'workout' ? `${typedText} ${elapsed}` : islandState === 'ok' ? `${typedText} · ${calories} ккал` : typedText;
-  const icon = islandState === 'onboarding' ? <UserRound size={16} /> : islandState === 'sleep' ? <Moon size={16} /> : islandState === 'cycle' ? <Droplet size={16} /> : islandState === 'workout' || islandState === 'paused' ? <Dumbbell size={16} /> : <Activity size={16} />;
-  const goTo = islandState === 'onboarding' ? '/coach' : islandState === 'sleep' ? '/sleep' : islandState === 'workout' || islandState === 'paused' ? '/workouts' : islandState === 'cycle' ? '/cycle' : '/dashboard';
+  const isWorkout = state === 'workout' || state === 'paused';
+  const Icon = state === 'workout' || state === 'paused' ? Dumbbell : state === 'no-profile' ? User : state === 'no-sleep' ? Moon : state === 'cycle' ? Droplet : Activity;
+  const isLong = stateContent.length > 30;
+  const goTo = state === 'workout' || state === 'paused' ? '/workout' : state === 'no-profile' ? '/coach' : state === 'no-sleep' ? '/sleep' : state === 'cycle' ? '/cycle' : '/dashboard';
 
-  const togglePause = (event: React.MouseEvent) => {
+  const handleIslandClick = () => {
+    if (displayText !== fullText.current) {
+      if (typingTimer.current) window.clearInterval(typingTimer.current);
+      typingTimer.current = null;
+      setDisplayText(fullText.current);
+      return;
+    }
+    navigate(goTo);
+  };
+
+  const handlePauseClick = (event: React.MouseEvent) => {
     event.stopPropagation();
-    if (!session) return;
-    const updated = session.pausedAt
-      ? { ...session, pausedAt: null, pausedMs: session.pausedMs + (Date.now() - session.pausedAt) }
-      : { ...session, pausedAt: Date.now() };
-    writeSession(updated);
-    setSession(updated);
+    togglePause();
   };
 
   return <div
-    role="status"
-    aria-live="polite"
-    onClick={() => navigate(goTo)}
-    style={{ ...glassStyle, width: text.length > 25 ? 320 : 200 }}
-    className="flex cursor-pointer items-center justify-center gap-2 text-sm text-text transition-[width] duration-300 hover:bg-white/[0.08]"
+    role="button"
+    tabIndex={0}
+    aria-label={fullText.current}
+    onClick={handleIslandClick}
+    onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') handleIslandClick(); }}
+    style={glassStyle}
+    className={`dynamic-island ${isLong ? 'island-wide' : ''} flex cursor-pointer items-center justify-center gap-2 text-[12px] text-[rgba(255,255,255,0.9)] transition-[width] duration-300 hover:bg-white/[0.08] md:text-[14px]`}
   >
-    <span className={islandState === 'workout' ? 'text-accent-orange' : 'text-accent-blue'}>{icon}</span>
-    <span className="min-w-0 truncate">{text}</span>
-    {(islandState === 'workout' || islandState === 'paused') && <button type="button" onClick={togglePause} aria-label={islandState === 'paused' ? 'Продолжить тренировку' : 'Поставить тренировку на паузу'} className="shrink-0 rounded-full p-1 text-text-secondary hover:bg-white/10 hover:text-text">{islandState === 'paused' ? <Play size={14} /> : <Pause size={14} />}</button>}
+    <Icon size={16} className="shrink-0 text-[rgba(255,255,255,0.7)]" />
+    <span className="min-w-0 truncate">{state === 'workout' ? `${displayText} ${formatTime(elapsedTime)}` : displayText}</span>
+    {isWorkout && <button type="button" onClick={handlePauseClick} aria-label={state === 'paused' ? 'Продолжить тренировку' : 'Поставить тренировку на паузу'} className="shrink-0 text-[rgba(255,255,255,0.8)] hover:text-[#4F46E5]">{state === 'paused' ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}</button>}
   </div>;
 }
 
-function readSession(): WorkoutSession | null {
-  try {
-    const stored = localStorage.getItem(WORKOUT_STORAGE_KEY);
-    if (stored) return JSON.parse(stored) as WorkoutSession;
-    const legacy = localStorage.getItem(legacyWorkoutKey);
-    return legacy ? { startedAt: Number(legacy), pausedAt: null, pausedMs: 0 } : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeSession(session: WorkoutSession | null) {
-  if (session) localStorage.setItem(WORKOUT_STORAGE_KEY, JSON.stringify(session));
-  else localStorage.removeItem(WORKOUT_STORAGE_KEY);
-}
-
-function getElapsedMs(session: WorkoutSession, now: number) {
-  const end = session.pausedAt ?? now;
-  return Math.max(0, end - session.startedAt - session.pausedMs);
-}
-
-function formatElapsed(milliseconds: number) {
-  const seconds = Math.floor(milliseconds / 1000);
+export function formatTime(seconds: number) {
   return `${String(Math.floor(seconds / 3600)).padStart(2, '0')}:${String(Math.floor((seconds % 3600) / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }

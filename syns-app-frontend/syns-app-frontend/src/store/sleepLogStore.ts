@@ -9,8 +9,10 @@ interface SleepLogState {
   loading: boolean;
   saving: boolean;
   error: string | null;
+  hasSleepToday: boolean;
   fetchByDate: (userId: string, date: string) => Promise<void>;
   fetchHistory: (userId: string, limit?: number) => Promise<SleepLog[]>;
+  fetchToday: (userId: string) => Promise<void>;
   saveLog: (
     userId: string,
     data: { log_date: string; hours: number; quality: number }
@@ -24,6 +26,7 @@ export const useSleepLogStore = create<SleepLogState>((set, get) => ({
   loading: false,
   saving: false,
   error: null,
+  hasSleepToday: false,
 
   fetchByDate: async (userId, date) => {
     set({ loading: true });
@@ -37,7 +40,15 @@ export const useSleepLogStore = create<SleepLogState>((set, get) => ({
       set({ loading: false, error: error.message });
       return;
     }
-    set({ todayLog: data as SleepLog | null, loading: false });
+    set({ todayLog: data as SleepLog | null, hasSleepToday: Boolean(data), loading: false });
+  },
+
+  fetchToday: async (userId) => {
+    try {
+      await get().fetchByDate(userId, new Date().toISOString().slice(0, 10));
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Не удалось загрузить сон' });
+    }
   },
 
   fetchHistory: async (userId, limit = 30) => {
@@ -82,7 +93,7 @@ export const useSleepLogStore = create<SleepLogState>((set, get) => ({
       savedLog = data as SleepLog;
     }
 
-    set({ todayLog: savedLog, saving: false });
+    set({ todayLog: savedLog, hasSleepToday: true, saving: false });
 
     // Award XP based on sleep duration
     const hours = entryData.hours;
@@ -110,5 +121,5 @@ export const useSleepLogStore = create<SleepLogState>((set, get) => ({
     return true;
   },
 
-  reset: () => set({ logs: [], todayLog: null, loading: false, saving: false, error: null }),
+  reset: () => set({ logs: [], todayLog: null, hasSleepToday: false, loading: false, saving: false, error: null }),
 }));

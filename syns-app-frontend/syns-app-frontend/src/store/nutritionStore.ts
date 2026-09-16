@@ -9,7 +9,10 @@ interface NutritionState {
   searching: boolean;
   loading: boolean;
   error: string | null;
+  todayCalories: number;
   fetchDaily: (userId: string, date: string) => Promise<void>;
+  fetchToday: (userId: string) => Promise<void>;
+  getTodayCalories: () => number;
   searchProducts: (query: string) => Promise<void>;
   searchOpenFoodFacts: (query: string) => Promise<FoodProduct[]>;
   addEntry: (
@@ -38,6 +41,7 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
   searching: false,
   loading: false,
   error: null,
+  todayCalories: 0,
 
   fetchDaily: async (userId: string, date: string) => {
     set({ loading: true });
@@ -51,8 +55,19 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
       set({ loading: false, error: error.message });
       return;
     }
-    set({ logs: data as NutritionLog[] ?? [], loading: false });
+    const logs = data as NutritionLog[] ?? [];
+    set({ logs, todayCalories: logs.reduce((sum, log) => sum + Number(log.calories || 0), 0), loading: false });
   },
+
+  fetchToday: async (userId) => {
+    try {
+      await get().fetchDaily(userId, new Date().toISOString().slice(0, 10));
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Не удалось загрузить калории' });
+    }
+  },
+
+  getTodayCalories: () => get().todayCalories,
 
   searchProducts: async (query: string) => {
     if (query.trim().length < 2) {
@@ -114,7 +129,7 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
       set({ error: error.message });
       return false;
     }
-    set({ logs: [...get().logs, data as NutritionLog] });
+    set({ logs: [...get().logs, data as NutritionLog], todayCalories: get().todayCalories + Number(entryData.calories || 0) });
 
     // Award XP for logging nutrition
     const statsStore = useStatsStore.getState();
@@ -179,5 +194,5 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
     return saved as FoodProduct;
   },
 
-  reset: () => set({ logs: [], searchResults: [], loading: false, error: null }),
+  reset: () => set({ logs: [], searchResults: [], todayCalories: 0, loading: false, error: null }),
 }));
