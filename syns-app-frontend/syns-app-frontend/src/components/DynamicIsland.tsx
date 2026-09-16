@@ -90,11 +90,11 @@ export default function DynamicIsland() {
   const stateContent = useMemo(() => {
     switch (state) {
       case 'workout': return 'Тренировка:';
-      case 'paused': return '⏸️ Пауза';
+      case 'paused': return 'Пауза';
       case 'no-profile': return 'Заполните анкету →';
       case 'no-sleep': return 'Запишите сон';
       case 'cycle': return phase ? `Сегодня ${getCycleText(phase)}` : 'Сегодня';
-      case 'idle': return calories > 0 ? `🍽️ ${calories} ккал` : 'Готов к тренировке';
+      case 'idle': return calories > 0 ? `${calories} ккал` : 'Готов к тренировке';
     }
   }, [calories, phase, state]);
 
