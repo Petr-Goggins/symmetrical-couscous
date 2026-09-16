@@ -50,36 +50,37 @@ export default function DashboardPage({ onOpenSidebar: _onOpenSidebar }: { onOpe
           .from('profiles')
           .select('weight, goal')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
         const today = new Date().toISOString().split('T')[0];
         const { data: meals } = await supabase
-          .from('meals')
+          .from('nutrition_logs')
           .select('calories')
           .eq('user_id', user.id)
-          .eq('date', today);
+          .eq('log_date', today);
         const totalCalories = meals?.reduce((sum, m) => sum + (m.calories || 0), 0) || 0;
 
         const { data: sleep } = await supabase
           .from('sleep_logs')
           .select('hours')
           .eq('user_id', user.id)
-          .eq('date', today)
-          .single();
+          .eq('log_date', today)
+          .maybeSingle();
         const sleepHours = sleep?.hours || 0;
 
         const { count: workoutsCount } = await supabase
           .from('workout_logs')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', user.id)
-          .eq('date', today);
+          .eq('log_date', today);
 
         const { data: waterData } = await supabase
           .from('water_logs')
-          .select('amount_ml')
+          .select('amount')
           .eq('user_id', user.id)
-          .eq('date', today);
-        const totalWater = waterData?.reduce((sum, w) => sum + w.amount_ml, 0) || 0;
+          .gte('created_at', `${today}T00:00:00.000Z`)
+          .lt('created_at', `${today}T23:59:59.999Z`);
+        const totalWater = waterData?.reduce((sum, w) => sum + w.amount, 0) || 0;
 
         setStats({
           weight: profile?.weight || 0,

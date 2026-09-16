@@ -58,17 +58,16 @@ export default function NutritionPage({ onOpenSidebar: _onOpenSidebar }: { onOpe
       return;
     }
     try {
-      const { error } = await supabase.from('meals').insert({
+      const { error } = await supabase.from('nutrition_logs').insert({
         user_id: user.id,
-        product_name: manualProduct.name,
+        custom_name: manualProduct.name,
         proteins: Number(manualProduct.proteins) || 0,
         fats: Number(manualProduct.fats) || 0,
         carbs: Number(manualProduct.carbs) || 0,
         calories: Number(manualProduct.calories) || 0,
-        weight_grams: 100,
+        grams: 100,
         meal_type: mealType,
-        date: new Date().toISOString().split('T')[0],
-        barcode: manualProduct.barcode || null,
+        log_date: new Date().toISOString().split('T')[0],
       });
       if (error) throw error;
       toast.success('Продукт добавлен!');

@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 export default function PlanPage({ onOpenSidebar: _onOpenSidebar }: { onOpenSidebar?: () => void }) {
   const user = useAuthStore((s) => s.user);
   const { profile, fetchProfile } = useProfileStore();
-  const { coachData, fetchCoachData } = useCoachStore();
+  const { coachData } = useCoachStore();
   const [plan, setPlan] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -19,7 +19,6 @@ export default function PlanPage({ onOpenSidebar: _onOpenSidebar }: { onOpenSide
     if (!user) return;
     const loadData = async () => {
       await fetchProfile(user.id);
-      await fetchCoachData(user.id);
       await loadPlan();
       setLoading(false);
     };
@@ -29,13 +28,14 @@ export default function PlanPage({ onOpenSidebar: _onOpenSidebar }: { onOpenSide
   const loadPlan = async () => {
     if (!user) return;
     const { data, error } = await supabase
-      .from('plans')
+      .from('user_plans')
       .select('*')
       .eq('user_id', user.id)
-      .eq('is_active', true)
-      .single();
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
     if (!error && data) {
-      setPlan(data);
+      setPlan({ ...data, current_week: 1 });
     } else {
       setPlan(null);
     }
@@ -85,18 +85,20 @@ export default function PlanPage({ onOpenSidebar: _onOpenSidebar }: { onOpenSide
       user_id: user.id,
       goal: selectedPlan.goal,
       structure: selectedPlan.structure,
-      current_week: 1,
-      is_active: true,
+      name: `Ascend: ${selectedPlan.goal}`,
+      weeks: 4,
+      days_per_week: 3,
+      weak_muscles: profile.weak_muscles || [],
     };
 
     const { data, error } = await supabase
-      .from('plans')
+      .from('user_plans')
       .insert(newPlan)
       .select()
       .single();
 
     if (!error) {
-      setPlan(data);
+      setPlan({ ...data, current_week: 1 });
       toast.success('План создан! 🎉');
     } else {
       toast.error('Ошибка при создании плана');

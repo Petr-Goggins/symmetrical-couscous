@@ -35,7 +35,7 @@ export default function SleepLogPage({ onOpenSidebar: _onOpenSidebar }: { onOpen
       .from('sleep_logs')
       .select('*')
       .eq('user_id', user.id)
-      .eq('date', formatDate(date))
+      .eq('log_date', formatDate(date))
       .order('created_at', { ascending: false });
     if (!error) setLogs(data || []);
     setLoading(false);
@@ -44,21 +44,11 @@ export default function SleepLogPage({ onOpenSidebar: _onOpenSidebar }: { onOpen
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    const qualityMap: Record<number, string> = {
-      1: 'Нет',
-      2: 'Нет',
-      3: 'Не очень',
-      4: 'Да',
-      5: 'Да',
-    };
     const { error } = await supabase.from('sleep_logs').insert({
       user_id: user.id,
       hours,
-      quality: qualityMap[quality] || 'Не очень',
-      feeling,
-      wake_up: wakeUp,
-      morning_mood: morningMood,
-      date: formatDate(date),
+      quality,
+      log_date: formatDate(date),
     });
     if (!error) {
       loadLogs();
@@ -82,7 +72,7 @@ export default function SleepLogPage({ onOpenSidebar: _onOpenSidebar }: { onOpen
         .from('sleep_logs')
         .select('hours')
         .eq('user_id', user.id)
-        .gte('date', start.toISOString().split('T')[0]);
+        .gte('log_date', start.toISOString().split('T')[0]);
       if (!error && data.length) {
         const avg = data.reduce((acc, item) => acc + item.hours, 0) / data.length;
         setWeeklyAvg(Math.round(avg * 10) / 10);

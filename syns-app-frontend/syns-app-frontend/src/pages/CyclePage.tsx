@@ -15,17 +15,22 @@ export default function CyclePage({ onOpenSidebar: _onOpenSidebar }: { onOpenSid
   useEffect(() => {
     if (!user) return;
     const loadCycle = async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('cycle_length, cycle_last_period')
-        .eq('id', user.id)
-        .single();
-      if (!error && data) {
-        setCycleLength(data.cycle_length || 28);
-        setLastPeriodDate(data.cycle_last_period || '');
-        if (data.cycle_last_period) {
-          calculatePhase(data.cycle_last_period, data.cycle_length || 28);
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('cycle_length, cycle_last_period')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (error) throw error;
+        if (data) {
+          setCycleLength(data.cycle_length || 28);
+          setLastPeriodDate(data.cycle_last_period || '');
+          if (data.cycle_last_period) {
+            calculatePhase(data.cycle_last_period, data.cycle_length || 28);
+          }
         }
+      } catch (error) {
+        console.error('Cycle load error', error);
       }
       setLoading(false);
     };

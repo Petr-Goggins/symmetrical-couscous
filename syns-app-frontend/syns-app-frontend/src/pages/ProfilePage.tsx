@@ -25,20 +25,20 @@ export default function ProfilePage({ onOpenSidebar: _onOpenSidebar }: { onOpenS
       const from = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
       try {
         const [{ data: profileData, error: profileError }, { data: workoutData, error: workoutError }, { data: mealData, error: mealError }] = await Promise.all([
-          supabase.from('profiles').select('full_name, weight, target_weight, goal, equipment').eq('id', user.id).maybeSingle(),
+          supabase.from('profiles').select('weight, target_weight, goal, equipment').eq('id', user.id).maybeSingle(),
           supabase.from('workout_logs').select('log_date, exercise_name, sets').eq('user_id', user.id).gte('log_date', from),
-          supabase.from('meals').select('date, calories').eq('user_id', user.id).gte('date', from),
+          supabase.from('nutrition_logs').select('log_date, calories').eq('user_id', user.id).gte('log_date', from),
         ]);
         if (profileError) throw profileError;
         if (workoutError) throw workoutError;
         if (mealError) throw mealError;
-        setName(profileData?.full_name || user.email?.split('@')[0] || 'Атлет');
+        setName(user.email?.split('@')[0] || 'Атлет');
         setProfile(profileData);
         const workoutMap = new Map<string, number>();
         workoutData?.forEach((item) => workoutMap.set(item.log_date, (workoutMap.get(item.log_date) ?? 0) + 1));
         setWorkouts([...workoutMap].map(([date, count]) => ({ date, level: 1, detail: `${count} записей тренировки` })));
         const mealMap = new Map<string, number>();
-        mealData?.forEach((item) => mealMap.set(item.date, (mealMap.get(item.date) ?? 0) + Number(item.calories || 0)));
+        mealData?.forEach((item) => mealMap.set(item.log_date, (mealMap.get(item.log_date) ?? 0) + Number(item.calories || 0)));
         setMeals([...mealMap].map(([date, calories]) => ({ date, level: calories > 2400 ? 3 : calories < 1200 ? 1 : 0, detail: `${calories} ккал` })));
       } catch (error) {
         console.error('Profile load error', error);

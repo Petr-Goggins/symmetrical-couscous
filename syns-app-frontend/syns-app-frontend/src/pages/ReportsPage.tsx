@@ -49,16 +49,16 @@ export default function ReportsPage({ onOpenSidebar: _onOpenSidebar }: { onOpenS
 
       // 1. Калории по дням
       const { data: meals } = await supabase
-        .from('meals')
-        .select('calories, date')
+        .from('nutrition_logs')
+        .select('calories, log_date')
         .eq('user_id', user.id)
-        .gte('date', startStr)
-        .lte('date', endStr)
-        .order('date', { ascending: true });
+        .gte('log_date', startStr)
+        .lte('log_date', endStr)
+        .order('log_date', { ascending: true });
 
       const calorieMap: Record<string, number> = {};
       meals?.forEach((m) => {
-        const d = m.date;
+        const d = m.log_date;
         calorieMap[d] = (calorieMap[d] || 0) + (m.calories || 0);
       });
       const calData = Object.keys(calorieMap).map((d) => ({
@@ -70,15 +70,15 @@ export default function ReportsPage({ onOpenSidebar: _onOpenSidebar }: { onOpenS
       // 2. Тренировки (подходы)
       const { data: workouts } = await supabase
         .from('workout_logs')
-        .select('sets, intensity, date')
+        .select('sets, intensity, log_date')
         .eq('user_id', user.id)
-        .gte('date', startStr)
-        .lte('date', endStr)
-        .order('date', { ascending: true });
+        .gte('log_date', startStr)
+        .lte('log_date', endStr)
+        .order('log_date', { ascending: true });
 
       const workoutMap: Record<string, { sets: number; intensity: number; count: number }> = {};
       workouts?.forEach((w) => {
-        const d = w.date;
+        const d = w.log_date;
         if (!workoutMap[d]) workoutMap[d] = { sets: 0, intensity: 0, count: 0 };
         workoutMap[d].sets += w.sets || 0;
         workoutMap[d].intensity += w.intensity || 0;
@@ -94,11 +94,11 @@ export default function ReportsPage({ onOpenSidebar: _onOpenSidebar }: { onOpenS
       // 3. Сон
       const { data: sleeps } = await supabase
         .from('sleep_logs')
-        .select('hours, date')
+        .select('hours, log_date')
         .eq('user_id', user.id)
-        .gte('date', startStr)
-        .lte('date', endStr)
-        .order('date', { ascending: true });
+        .gte('log_date', startStr)
+        .lte('log_date', endStr)
+        .order('log_date', { ascending: true });
 
       const sleepMap: Record<string, number> = {};
       sleeps?.forEach((s) => {
