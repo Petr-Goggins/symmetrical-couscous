@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../lib/supabase';
-import { Plus, Sparkles, Filter, X } from 'lucide-react';
+import { Plus, Search, Sparkles, Filter, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function NutritionPage({ onOpenSidebar: _onOpenSidebar }: { onOpenSidebar?: () => void }) {
@@ -14,6 +14,10 @@ export default function NutritionPage({ onOpenSidebar: _onOpenSidebar }: { onOpe
   const [budget, setBudget] = useState<number>(3000);
   const [favoriteFoods, setFavoriteFoods] = useState<string>('');
   const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
+  const [productQuery, setProductQuery] = useState('');
+  const [productResults, setProductResults] = useState<Array<{ name: string; calories: number; source: string }>>([]);
+  const [productSearchLoading, setProductSearchLoading] = useState(false);
+  const [productSearchError, setProductSearchError] = useState('');
   const [manualProduct, setManualProduct] = useState({
     name: '',
     proteins: '',
@@ -25,18 +29,23 @@ export default function NutritionPage({ onOpenSidebar: _onOpenSidebar }: { onOpe
 
   useEffect(() => {
     const loadMealPlans = async () => {
-      const { data, error } = await supabase
-        .from('meal_plans')
-        .select('*')
-        .eq('is_system', true);
-      if (!error && data) {
-        setMealPlans(data);
-      } else {
-        setMealPlans([
-          { id: '1', name: 'Сбалансированный', description: 'Классическое соотношение БЖУ', type: 'balanced', diet: 'none', time: 'fast', meals: [], is_system: true },
-          { id: '2', name: 'Высокобелковый', description: 'Для активных людей', type: 'high-protein', diet: 'none', time: 'medium', meals: [], is_system: true },
-        ]);
+      try {
+        const { data, error } = await supabase
+          .from('meal_plans')
+          .select('*')
+          .eq('is_system', true);
+        if (error) throw error;
+        if (data) {
+          setMealPlans(data);
+          return;
+        }
+      } catch (error) {
+        console.error('Meal plans load failed', error);
       }
+      setMealPlans([
+        { id: '1', name: 'Сбалансированный', description: 'Классическое соотношение БЖУ', type: 'balanced', diet: 'none', time: 'fast', meals: [], is_system: true },
+        { id: '2', name: 'Высокобелковый', description: 'Для активных людей', type: 'high-protein', diet: 'none', time: 'medium', meals: [], is_system: true },
+      ]);
     };
     loadMealPlans();
   }, []);
@@ -48,29 +57,72 @@ export default function NutritionPage({ onOpenSidebar: _onOpenSidebar }: { onOpe
       toast.error('Введите название продукта');
       return;
     }
-    const { error } = await supabase.from('meals').insert({
-      user_id: user.id,
-      product_name: manualProduct.name,
-      proteins: Number(manualProduct.proteins) || 0,
-      fats: Number(manualProduct.fats) || 0,
-      carbs: Number(manualProduct.carbs) || 0,
-      calories: Number(manualProduct.calories) || 0,
-      weight_grams: 100,
-      meal_type: mealType,
-      date: new Date().toISOString().split('T')[0],
-      barcode: manualProduct.barcode || null,
-    });
-    if (!error) {
+    try {
+      const { error } = await supabase.from('meals').insert({
+        user_id: user.id,
+        product_name: manualProduct.name,
+        proteins: Number(manualProduct.proteins) || 0,
+        fats: Number(manualProduct.fats) || 0,
+        carbs: Number(manualProduct.carbs) || 0,
+        calories: Number(manualProduct.calories) || 0,
+        weight_grams: 100,
+        meal_type: mealType,
+        date: new Date().toISOString().split('T')[0],
+        barcode: manualProduct.barcode || null,
+      });
+      if (error) throw error;
       toast.success('Продукт добавлен!');
       setManualProduct({ name: '', proteins: '', fats: '', carbs: '', calories: '', barcode: '' });
-    } else {
-      toast.error('Ошибка: ' + error.message);
+    } catch (error) {
+      toast.error(error instanceof Error ? `Ошибка: ${error.message}` : 'Ошибка добавления продукта');
     }
   };
 
   const filteredPlans = mealPlans.filter(
     (p) => p.diet === selectedDiet && p.type === selectedType && p.time === selectedTime
   );
+
+  const searchProducts = async () => {
+    const query = productQuery.trim();
+    if (!query) return;
+    setProductSearchLoading(true);
+    setProductSearchError('');
+    setProductResults([]);
+    const sources = [
+      { name: 'ВкусВилл', url: import.meta.env.VITE_VKUSVILL_API_URL },
+      { name: 'Пятёрочка', url: import.meta.env.VITE_PYATEROCHKA_API_URL },
+    ];
+    try {
+      for (const source of sources) {
+        if (!source.url) continue;
+        try {
+          const response = await fetch(`${source.url}?query=${encodeURIComponent(query)}`);
+          if (!response.ok) throw new Error(`${source.name}: ${response.status}`);
+          const payload = await response.json();
+          const items = Array.isArray(payload) ? payload : payload.products ?? payload.results ?? [];
+          if (items.length) {
+            setProductResults(items.slice(0, 8).map((item: any) => ({ name: item.name ?? item.title ?? query, calories: Number(item.calories ?? item.nutrition?.calories ?? 0), source: source.name })));
+            return;
+          }
+        } catch (error) {
+          console.warn(`${source.name} search failed`, error);
+        }
+      }
+      try {
+        const response = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=true`);
+        if (!response.ok) throw new Error(`Open Food Facts: ${response.status}`);
+        const payload = await response.json();
+        const items = (payload.products ?? []).filter((item: any) => item.product_name);
+        setProductResults(items.slice(0, 8).map((item: any) => ({ name: item.product_name, calories: Number(item.nutriments?.['energy-kcal_100g'] ?? 0), source: 'Open Food Facts' })));
+        if (!items.length) setProductSearchError('Продукт не найден');
+      } catch (error) {
+        console.error('Open Food Facts search failed', error);
+        setProductSearchError('Поиск временно недоступен');
+      }
+    } finally {
+      setProductSearchLoading(false);
+    }
+  };
 
   return (
     <div className="p-4 max-w-6xl mx-auto">
@@ -149,6 +201,13 @@ export default function NutritionPage({ onOpenSidebar: _onOpenSidebar }: { onOpe
       </div>
 
       <hr className="border-border my-6" />
+
+      <section className="card-modern mb-6 space-y-4">
+        <div><h2 className="text-lg font-semibold text-text">Поиск продуктов</h2><p className="text-xs text-text-tertiary">ВкусВилл → Пятёрочка → Open Food Facts</p></div>
+        <div className="flex gap-2"><input value={productQuery} onChange={(event) => setProductQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void searchProducts(); }} className="input-field min-w-0 flex-1 px-3 py-2.5 text-text" placeholder="Например, творог" /><button type="button" onClick={() => void searchProducts()} disabled={productSearchLoading} className="btn-primary flex items-center gap-2 px-4 py-2.5 disabled:opacity-50"><Search size={17} /> Искать</button></div>
+        {productSearchError && <p className="text-sm text-accent-red">{productSearchError}</p>}
+        {productResults.length > 0 && <div className="grid gap-2 sm:grid-cols-2">{productResults.map((product, index) => <button type="button" key={`${product.name}-${index}`} onClick={() => setManualProduct((current) => ({ ...current, name: product.name, calories: String(product.calories) }))} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-left hover:border-accent-blue"><span className="text-sm text-text">{product.name}</span><span className="rounded-full bg-accent-blue/10 px-2 py-1 text-[10px] text-accent-blue">{product.source}</span></button>)}</div>}
+      </section>
 
       <div>
         <h2 className="text-lg font-semibold text-text mb-4">Добавить приём пищи</h2>

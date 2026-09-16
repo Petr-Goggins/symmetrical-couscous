@@ -109,7 +109,7 @@
   background-color: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 1.25rem;
+  padding: 1.5rem;
   transition: all 0.2s ease;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
@@ -120,6 +120,11 @@
 }
   * {
     border-color: var(--border);
+  }
+
+  @media (max-width: 767px) {
+    .card-modern { padding: 1rem; }
+    .mobile-even { display: flex; flex: 1 1 0%; justify-content: space-evenly; }
   }
 
   body {
