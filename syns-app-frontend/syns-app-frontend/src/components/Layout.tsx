@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import DynamicIsland from './DynamicIsland';
+import BottomNav from './BottomNav';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -167,7 +168,8 @@ export default function Layout({ children, sidebarOpen, onCloseSidebar }: Layout
             </div>
           </div>
         </header>
-        <div className="flex-1 p-4">{children}</div>
+        <div className="flex-1 p-4 pb-20 md:pb-4">{children}</div>
+        <BottomNav />
       </main>
     </div>
   );

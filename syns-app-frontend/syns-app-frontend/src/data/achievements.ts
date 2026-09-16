@@ -1,24 +1,16 @@
-export interface Achievement {
+export interface AchievementDefinition {
   id: string;
-  icon: string;
   title: string;
   description: string;
-  unlocked: boolean;
 }
 
-export const ACHIEVEMENTS: Achievement[] = [
-  { id: 'first_workout', icon: '🌱', title: 'Первый шаг', description: 'Запишите первую тренировку', unlocked: true },
-  { id: 'first_plan', icon: '📋', title: 'Стратег', description: 'Сгенерируйте персональный план', unlocked: true },
-  { id: 'first_meal', icon: '🍽️', title: 'Первый приём', description: 'Запишите первый продукт в дневник', unlocked: true },
-  { id: 'water_master', icon: '💧', title: 'Водный мастер', description: '30 дней нормы воды', unlocked: true },
-  { id: 'week_streak', icon: '🔥', title: 'Неделя огня', description: '7 дней подряд с тренировками', unlocked: true },
-  { id: 'plan_week', icon: '✅', title: 'Идеальная неделя', description: 'Выполните все тренировки недели плана', unlocked: true },
-  { id: 'level_5', icon: '⭐', title: 'Новичок+', description: 'Достигните 5 уровня', unlocked: true },
-  { id: 'nutrition_5', icon: '🥗', title: '5 дней чистоты', description: '5 дней в рамках КБЖУ', unlocked: false },
-  { id: 'plan_month', icon: '🏆', title: 'Месяц дисциплины', description: 'Завершите 4-недельный план', unlocked: false },
-  { id: 'iron_will', icon: '💪', title: 'Железная воля', description: '30 тренировок за месяц', unlocked: false },
-  { id: 'recovery_pro', icon: '😴', title: 'Мастер восстановления', description: '14 дней сна 8+ часов', unlocked: false },
-  { id: 'level_10', icon: '👑', title: 'Чемпион', description: 'Достигните 10 уровня', unlocked: false },
-  { id: 'century', icon: '💯', title: 'Сотня', description: '100 тренировок всего', unlocked: false },
-  { id: 'ai_friend', icon: '🤖', title: 'Друг ИИ', description: '50 сообщений наставнику', unlocked: false },
+export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
+  { id: 'first', title: 'Первая тренировка', description: 'Добавьте запись в workout_logs' },
+  { id: 'streak', title: '5 дней подряд', description: 'Тренируйтесь пять дней подряд' },
+  { id: 'thirty', title: '30 тренировок', description: 'Добавьте 30 записей тренировок' },
+  { id: 'squat', title: '+5 кг к приседу', description: 'Покажите рост веса в приседаниях' },
+  { id: 'cardio', title: 'Кардио-ритм', description: 'Выполните десять кардио-тренировок' },
+  { id: 'stretch', title: 'Гибкость', description: 'Запишите пять тренировок на растяжку' },
+  { id: 'sleep', title: 'Восстановление', description: 'Спите восемь часов четырнадцать дней' },
+  { id: 'hundred', title: '100 тренировок', description: 'Добавьте 100 записей тренировок' },
 ];

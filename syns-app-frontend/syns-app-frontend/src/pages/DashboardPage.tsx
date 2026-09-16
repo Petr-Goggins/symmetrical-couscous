@@ -48,7 +48,7 @@ export default function DashboardPage({ onOpenSidebar: _onOpenSidebar }: { onOpe
       try {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('weight, goal')
+          .select('weight, target_weight, goal')
           .eq('id', user.id)
           .maybeSingle();
 
@@ -74,6 +74,22 @@ export default function DashboardPage({ onOpenSidebar: _onOpenSidebar }: { onOpe
           .eq('user_id', user.id)
           .eq('log_date', today);
 
+        const { data: workoutHistory, error: workoutHistoryError } = await supabase
+          .from('workout_logs')
+          .select('log_date')
+          .eq('user_id', user.id)
+          .order('log_date', { ascending: false });
+        if (workoutHistoryError) throw workoutHistoryError;
+        const dates = [...new Set((workoutHistory ?? []).map((item) => item.log_date))];
+        let streak = 0;
+        let previous: Date | null = null;
+        for (const value of dates) {
+          const date = new Date(`${value}T00:00:00`);
+          if (previous && Math.round((previous.getTime() - date.getTime()) / 86400000) !== 1) break;
+          streak += 1;
+          previous = date;
+        }
+
         const { data: waterData } = await supabase
           .from('water_logs')
           .select('amount')
@@ -89,8 +105,8 @@ export default function DashboardPage({ onOpenSidebar: _onOpenSidebar }: { onOpe
           sleep: sleepHours,
           workouts: workoutsCount || 0,
           goal: profile?.goal || 'Поддержание',
-          progress: 65,
-          streak: 7,
+          progress: profile?.target_weight && profile.weight ? Math.max(0, Math.min(100, Math.round((1 - Math.abs(profile.weight - profile.target_weight) / Math.max(profile.weight, 1)) * 100))) : 0,
+          streak,
         });
       } catch (error) {
         console.error(error);
