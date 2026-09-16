@@ -25,6 +25,8 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   startWorkout: () => {
     const startedAt = Date.now();
     window.localStorage.setItem('ascend-workout-start', String(startedAt));
+    window.localStorage.removeItem('ascend-workout-paused-at');
+    window.localStorage.removeItem('ascend-workout-paused-seconds');
     set({ isActive: true, isPaused: false, elapsedTime: 0, startedAt });
     if (timer) window.clearInterval(timer);
     timer = window.setInterval(() => tick(set, startedAt, null, 0), 1000);
@@ -33,6 +35,8 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     if (timer) window.clearInterval(timer);
     timer = null;
     window.localStorage.removeItem('ascend-workout-start');
+    window.localStorage.removeItem('ascend-workout-paused-at');
+    window.localStorage.removeItem('ascend-workout-paused-seconds');
     set({ isActive: false, isPaused: false, elapsedTime: 0, startedAt: null });
   },
   togglePause: () => {
@@ -57,7 +61,8 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     if (!startedAt) return;
     const pausedAt = Number(window.localStorage.getItem('ascend-workout-paused-at') || 0) || null;
     const pausedSeconds = Number(window.localStorage.getItem('ascend-workout-paused-seconds') || 0);
-    set({ isActive: true, isPaused: Boolean(pausedAt), startedAt, elapsedTime: Math.max(0, Math.floor((Date.now() - startedAt) / 1000) - pausedSeconds) });
+    const elapsedEnd = pausedAt || Date.now();
+    set({ isActive: true, isPaused: Boolean(pausedAt), startedAt, elapsedTime: Math.max(0, Math.floor((elapsedEnd - startedAt) / 1000) - pausedSeconds) });
     if (!pausedAt) {
       if (timer) window.clearInterval(timer);
       timer = window.setInterval(() => tick(set, startedAt, null, pausedSeconds), 1000);
