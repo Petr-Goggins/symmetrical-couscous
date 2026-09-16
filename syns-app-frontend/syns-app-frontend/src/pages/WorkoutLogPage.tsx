@@ -26,6 +26,7 @@ export default function WorkoutLogPage({ onOpenSidebar: _onOpenSidebar }: { onOp
   });
   const [date, setDate] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeWorkout, setActiveWorkout] = useState(() => Boolean(localStorage.getItem('ascend-workout-start')));
 
   if (!user) {
     return <div className="p-4 text-text-secondary">Пожалуйста, войдите.</div>;
@@ -97,9 +98,7 @@ export default function WorkoutLogPage({ onOpenSidebar: _onOpenSidebar }: { onOp
           <Dumbbell size={28} className="text-accent-blue" />
           Тренировки
         </h1>
-        <span className="text-xs bg-accent-blue/10 text-accent-blue px-3 py-1 rounded-full">
-          {logs.length} упр.
-        </span>
+        <div className="flex items-center gap-2"><span className="text-xs bg-accent-blue/10 text-accent-blue px-3 py-1 rounded-full">{logs.length} упр.</span><button type="button" onClick={() => { if (activeWorkout) { localStorage.removeItem('ascend-workout-start'); setActiveWorkout(false); toast.success('Тренировка завершена'); } else { localStorage.setItem('ascend-workout-start', String(Date.now())); setActiveWorkout(true); toast.success('Тренировка началась'); } }} className="btn-primary px-3 py-1.5 text-xs">{activeWorkout ? 'Завершить' : 'Начать'}</button></div>
       </div>
 
       {/* Дата — прозрачная, как в питании */}
