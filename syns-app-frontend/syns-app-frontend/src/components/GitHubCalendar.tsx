@@ -1,0 +1,12 @@
+import { useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+
+type Day = { date: string; level: number; detail: string };
+interface Props { title: string; days: Day[]; mode?: 'nutrition' | 'workout'; }
+
+export default function GitHubCalendar({ title, days, mode = 'workout' }: Props) {
+  const [month, setMonth] = useState(new Date());
+  const byDate = useMemo(() => new Map(days.map((day) => [day.date, day])), [days]);
+  const cells = useMemo(() => { const start = new Date(month.getFullYear(), month.getMonth(), 1); const offset = (start.getDay() + 6) % 7; return Array.from({ length: 49 }, (_, index) => { const day = new Date(month.getFullYear(), month.getMonth(), index - offset + 1); return { date: day.toISOString().slice(0, 10), current: day.getMonth() === month.getMonth() }; }); }, [month]);
+  return <section className="card-modern"><div className="mb-4 flex items-center justify-between"><h3 className="font-semibold text-text">{title}</h3><div className="flex gap-1"><button type="button" aria-label="Предыдущий месяц" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="btn-secondary p-1.5"><ChevronLeft size={15} /></button><button type="button" aria-label="Следующий месяц" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="btn-secondary p-1.5"><ChevronRight size={15} /></button></div></div><p className="mb-3 text-xs text-text-tertiary">{month.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}</p><div className="grid grid-cols-7 gap-1">{cells.map((cell) => { const day = byDate.get(cell.date); const color = !cell.current ? 'bg-transparent' : !day ? 'bg-bg-tertiary' : mode === 'workout' ? 'bg-accent-green' : day.level >= 3 ? 'bg-accent-red' : day.level >= 1 ? 'bg-accent-gold' : 'bg-accent-green'; return <button key={cell.date} type="button" title={day?.detail || 'Нет данных'} className={`h-3 w-3 rounded-sm ${color} ${!cell.current ? 'opacity-0' : 'opacity-90 hover:opacity-100'}`} aria-label={`${cell.date}: ${day?.detail || 'нет данных'}`} />; })}</div><div className="mt-3 flex items-center gap-2 text-[10px] text-text-tertiary"><span>Меньше</span>{['bg-bg-tertiary', 'bg-accent-green/50', 'bg-accent-gold', 'bg-accent-red'].map((color) => <span key={color} className={`h-3 w-3 rounded-sm ${color}`} />)}<span>Больше</span></div></section>;
+}
