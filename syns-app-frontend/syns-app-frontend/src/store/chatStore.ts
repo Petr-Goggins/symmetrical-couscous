@@ -135,50 +135,40 @@ export const useChatStore = create<ChatState>((set, get) => ({
     };
     set({ messages: [...get().messages, tempUserMsg], loading: true, error: null });
 
-    const { data: savedUser, error: insertErr } = await supabase
-      .from('chat_messages')
-      .insert({ user_id: userId, role: 'user', content })
-      .select()
-      .single();
-    if (insertErr) {
-      set({ loading: false, error: insertErr.message });
-      return;
-    }
-    // replace temp message with persisted one
-    set({
-      messages: get().messages.map((m) => (m.id === tempUserMsg.id ? (savedUser as ChatMessage) : m)),
-    });
-
-    // Simulate AI response (MVP stub — would call VITE_API_URL in production)
     const context = buildContext(profile);
-    console.log('[Chat] Sending to API. Context:', context);
+    let savedUser: ChatMessage | null = null;
+    try {
+      const result = await supabase.from('chat_messages').insert({ user_id: userId, role: 'user', content }).select().single();
+      if (!result.error) savedUser = result.data as ChatMessage;
+    } catch (error) {
+      console.warn('Chat history user message was not saved', error);
+    }
+    if (savedUser) set({ messages: get().messages.map((m) => (m.id === tempUserMsg.id ? savedUser! : m)) });
 
-    // Check for plan adjustment commands
-    const lower = content.toLowerCase();
     let reply: string;
-
-    if (/убери|замени|убрать|заменить/.test(lower) && /жим|присед|тяга|отжиман|подтяг|упражнен/.test(lower)) {
-      reply = `Понял, уберу/заменю это упражнение в вашем плане. В полном режиме ИИ автоматически обновит план. Сейчас вы можете сгенерировать новый план на странице «Мой план» — алгоритм учтёт ваши пожелания.`;
-    } else if (/короче|короче тренировку|сократи/.test(lower)) {
-      reply = `Хорошо, могу сократить тренировки. В анкете тренера выберите меньшую длительность (20-30 минут), и план перестроится с суперсетами и минимальным отдыхом.`;
-    } else if (/больше углевод|добавь углевод|больше калорий/.test(lower)) {
-      reply = `Понял, увеличу углеводы в рационе. Используйте кнопку «Готовый рацион» в дневнике питания — он генерируется с учётом вашей нормы. Для ручной корректировки добавьте крупы или фрукты в приёмы пищи.`;
-    } else {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      const response = await fetch(`${apiUrl}/ai/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: content, user_data: { context, ...(profile ?? {}) } }),
+      });
+      if (!response.ok) throw new Error(`AI API: ${response.status}`);
+      const data = await response.json() as { reply?: string };
+      reply = data.reply?.trim() || 'ИИ не вернул ответ. Попробуйте ещё раз.';
+    } catch (error) {
+      console.error('AI request failed', error);
       reply = pickReply(content);
     }
 
-    await new Promise((r) => setTimeout(r, 900 + Math.random() * 800));
-
-    const { data: savedAi, error: aiErr } = await supabase
-      .from('chat_messages')
-      .insert({ user_id: userId, role: 'assistant', content: reply })
-      .select()
-      .single();
-    if (aiErr) {
-      set({ loading: false, error: aiErr.message });
-      return;
+    try {
+      const result = await supabase.from('chat_messages').insert({ user_id: userId, role: 'assistant', content: reply }).select().single();
+      const assistantMessage = result.data as ChatMessage | null;
+      set({ messages: [...get().messages, assistantMessage ?? { id: `ai-${Date.now()}`, user_id: userId, role: 'assistant', content: reply, created_at: new Date().toISOString() }], loading: false });
+    } catch (error) {
+      console.warn('Chat history AI message was not saved', error);
+      set({ messages: [...get().messages, { id: `ai-${Date.now()}`, user_id: userId, role: 'assistant', content: reply, created_at: new Date().toISOString() }], loading: false });
     }
-    set({ messages: [...get().messages, savedAi as ChatMessage], loading: false });
   },
   clearMessages: async (userId: string) => {
     await supabase.from('chat_messages').delete().eq('user_id', userId);
