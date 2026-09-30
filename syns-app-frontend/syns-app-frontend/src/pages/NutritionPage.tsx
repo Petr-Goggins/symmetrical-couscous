@@ -88,23 +88,21 @@ export default function NutritionPage({ onOpenSidebar: _onOpenSidebar }: { onOpe
     setProductSearchError('');
     setProductResults([]);
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      if (!supabaseUrl || !anonKey) throw new Error('Supabase search is not configured');
-      const response = await fetch(`${supabaseUrl}/functions/v1/product-search?q=${encodeURIComponent(query)}&limit=10`, {
-        headers: { Authorization: `Bearer ${anonKey}`, apikey: anonKey },
-      });
+      const configuredApiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      const apiUrl = new URL(configuredApiUrl);
+      if (apiUrl.hostname === 'localhost') apiUrl.hostname = '127.0.0.1';
+      const response = await fetch(`${apiUrl.origin}/products/search?query=${encodeURIComponent(query)}`);
       if (!response.ok) throw new Error(`Product search: ${response.status}`);
       const payload = await response.json();
-      const items = payload.products ?? [];
+      const items = Array.isArray(payload) ? payload : payload.products ?? [];
       setProductResults(items.map((item: any) => ({
         name: item.name ?? query,
-        brand: item.brand ?? 'Бренд не указан',
+        brand: item.brand?.trim() || 'Бренд не указан',
         proteins: Number(item.proteins ?? 0),
         fats: Number(item.fats ?? 0),
         carbs: Number(item.carbs ?? 0),
         calories: Number(item.calories ?? 0),
-        source: item.source === 'api' ? 'Open Food Facts' : item.source ?? 'База продуктов',
+        source: item.source ?? 'Open Food Facts',
       })));
       if (!items.length) setProductSearchError('Продукт не найден');
     } catch (error) {
